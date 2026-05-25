@@ -16,10 +16,7 @@ import { ExitConversationModal } from "./exit-conversation-modal";
 import { useClickOutsideElement } from "#/hooks/use-click-outside-element";
 import { Provider } from "#/types/settings";
 import { useUpdateConversation } from "#/hooks/mutation/use-update-conversation";
-import {
-  displayErrorToast,
-  displaySuccessToast,
-} from "#/utils/custom-toast-handlers";
+import { displaySuccessToast } from "#/utils/custom-toast-handlers";
 import { isExecutionActive } from "#/utils/status";
 import { useCreateConversation } from "#/hooks/mutation/use-create-conversation";
 import { useIsCreatingConversation } from "#/hooks/use-is-creating-conversation";
@@ -52,26 +49,29 @@ const noop = () => {};
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 
-const partitionByCutoff = <T extends { updated_at: string }>(
+// The cutoff is intentionally relative to "now" each time the list is
+// recomputed, so conversations naturally age into the hidden set as the
+// query refreshes. Missing or unparseable timestamps are treated as recent
+// (kept visible) so they are never accidentally hidden.
+const filterByHidePreferences = <T extends { updated_at: string }>(
   items: readonly T[],
-): { recent: T[]; older: T[] } => {
-  // The cutoff is intentionally relative to "now" each time the list is
-  // recomputed, so conversations naturally age into the older bucket as the
-  // conversations query refreshes.
+  hideInactive: boolean,
+  hideOld: boolean,
+): T[] => {
+  if (!hideInactive && !hideOld) return [...items];
   const cutoff = Date.now() - ONE_HOUR_MS;
-  const recent: T[] = [];
-  const older: T[] = [];
-  for (const item of items) {
-    const updatedAt = item.updated_at ? Date.parse(item.updated_at) : NaN;
-    // Missing or unparseable timestamps stay in the "recent" bucket so we
-    // do not accidentally hide them behind the older-conversations toggle.
-    if (Number.isFinite(updatedAt) && updatedAt < cutoff) {
-      older.push(item);
-    } else {
-      recent.push(item);
-    }
+  const isRecent = (item: T) => {
+    const t = item.updated_at ? Date.parse(item.updated_at) : NaN;
+    return !Number.isFinite(t) || t >= cutoff;
+  };
+  let result: T[] = [...items];
+  if (hideInactive) {
+    result = result.filter(isRecent);
   }
-  return { recent, older };
+  if (hideOld) {
+    result = result.filter(isRecent);
+  }
+  return result;
 };
 
 export function ConversationPanel({
@@ -95,13 +95,17 @@ export function ConversationPanel({
     confirmExitConversationModalVisible,
     setConfirmExitConversationModalVisible,
   ] = React.useState(false);
-  const [confirmDeleteAllVisible, setConfirmDeleteAllVisible] =
-    React.useState(false);
-  const showOlderConversations = useConversationPanelPreferencesStore(
-    (state) => state.showOlderConversations,
+  const hideInactiveConversations = useConversationPanelPreferencesStore(
+    (state) => state.hideInactiveConversations,
   );
-  const toggleShowOlderConversations = useConversationPanelPreferencesStore(
-    (state) => state.toggleShowOlderConversations,
+  const toggleHideInactiveConversations = useConversationPanelPreferencesStore(
+    (state) => state.toggleHideInactiveConversations,
+  );
+  const hideOldConversations = useConversationPanelPreferencesStore(
+    (state) => state.hideOldConversations,
+  );
+  const toggleHideOldConversations = useConversationPanelPreferencesStore(
+    (state) => state.toggleHideOldConversations,
   );
   const showRepoBranchMetadata = useConversationPanelPreferencesStore(
     (state) => state.showRepoBranchMetadata,
@@ -211,23 +215,20 @@ export function ConversationPanel({
     return conversations;
   }, [conversations, threadScope]);
 
-  const { recent: recentScoped, older: olderScoped } = React.useMemo(
-    () => partitionByCutoff(scopedConversations),
-    [scopedConversations],
+  const filteredConversations = React.useMemo(
+    () =>
+      filterByHidePreferences(
+        scopedConversations,
+        hideInactiveConversations,
+        hideOldConversations,
+      ),
+    [scopedConversations, hideInactiveConversations, hideOldConversations],
   );
 
-  // Sort the full visible set as one list. The recent/older partition is
-  // still computed (it gates the "Show older" toggle and "Load more"
-  // visibility), but the rendering must not use it as a visual boundary —
-  // when sorting by `created`, a stale-but-recently-touched conversation
-  // would otherwise land in `recent` and render above an actually-newer-
-  // by-`created_at` conversation sitting in `older`.
-  const sortedVisibleConversations = React.useMemo(() => {
-    const visible = showOlderConversations
-      ? [...recentScoped, ...olderScoped]
-      : recentScoped;
-    return sortConversationsByField(visible, conversationSort);
-  }, [recentScoped, olderScoped, showOlderConversations, conversationSort]);
+  const sortedVisibleConversations = React.useMemo(
+    () => sortConversationsByField(filteredConversations, conversationSort),
+    [filteredConversations, conversationSort],
+  );
 
   const groupLabels = React.useMemo(
     () => ({
@@ -241,15 +242,8 @@ export function ConversationPanel({
     if (compact || organizeMode !== "grouped") {
       return null;
     }
-    // Use the unsorted partitions: groupConversations sorts each bucket
-    // internally by `sortField`, so pre-sorting the merged input is wasted
-    // work in grouped mode (the per-group sort overrides any global order).
-    const merged = [
-      ...recentScoped,
-      ...(showOlderConversations ? olderScoped : []),
-    ];
     return groupConversations(
-      merged,
+      filteredConversations,
       activeBackend.kind,
       conversationSort,
       groupLabels,
@@ -258,22 +252,20 @@ export function ConversationPanel({
     activeBackend.kind,
     compact,
     conversationSort,
+    filteredConversations,
     groupLabels,
-    olderScoped,
     organizeMode,
-    recentScoped,
-    showOlderConversations,
   ]);
 
   const compactVisibleConversations = React.useMemo(
     () =>
       sortConversationsByField(
-        recentScoped.filter((conversation) =>
+        filteredConversations.filter((conversation) =>
           isExecutionActive(conversation.execution_status),
         ),
         conversationSort,
       ),
-    [conversationSort, recentScoped],
+    [conversationSort, filteredConversations],
   );
 
   const visibleFlatCount = sortedVisibleConversations.length;
@@ -290,22 +282,17 @@ export function ConversationPanel({
       ? visibleGroupedCount === 0
       : visibleFlatCount === 0;
 
-  const { mutate: deleteConversation, mutateAsync: deleteConversationAsync } =
-    useDeleteConversation();
+  const { mutate: deleteConversation } = useDeleteConversation();
   const { mutate: pauseConversation } = useUnifiedPauseConversation();
   const { mutate: updateConversation } = useUpdateConversation();
 
   // The next page of conversations is loaded only via the explicit "Load
   // more" link rendered at the end of the list — there is no scroll-driven
-  // pagination, which previously caused the panel to feel like it had stray
-  // scrollable space at the bottom.
-  const olderHidden = olderScoped.length > 0 && !showOlderConversations;
-  // Compact mode also hides "Load more" — paginating into archived
+  // pagination. Compact mode hides "Load more" since paginating into older
   // conversations contradicts the "active only" intent of the icon rail.
   // Do not show when the visible list is empty (e.g. filters hide every
   // loaded conversation) — that state already shows "No conversations found".
-  const showLoadMore =
-    !!hasNextPage && !olderHidden && !compact && !listIsEffectivelyEmpty;
+  const showLoadMore = !!hasNextPage && !compact && !listIsEffectivelyEmpty;
 
   const { mutate: createConversation } = useCreateConversation();
   const isCreatingConversationFlow = useIsCreatingConversation();
@@ -376,33 +363,6 @@ export function ConversationPanel({
       pauseConversation({
         conversationId: selectedConversationId,
       });
-    }
-  };
-
-  const handleConfirmDeleteAll = async () => {
-    const idsToDelete = conversations.map((c) => c.id);
-    const results = await Promise.allSettled(
-      idsToDelete.map((conversationId) =>
-        deleteConversationAsync({ conversationId }),
-      ),
-    );
-
-    const deletedIds = results.flatMap((result, index) =>
-      result.status === "fulfilled" ? [idsToDelete[index]] : [],
-    );
-    const failedCount = results.length - deletedIds.length;
-
-    if (
-      currentConversationId !== null &&
-      deletedIds.includes(currentConversationId)
-    ) {
-      navigate("/conversations");
-    }
-
-    if (failedCount > 0) {
-      displayErrorToast(
-        `${failedCount} conversation${failedCount === 1 ? "" : "s"} could not be deleted.`,
-      );
     }
   };
 
@@ -548,14 +508,16 @@ export function ConversationPanel({
                 setConversationSort={setConversationSort}
                 threadScope={threadScope}
                 setThreadScope={setThreadScope}
-                showOlderConversations={showOlderConversations}
-                toggleShowOlderConversations={toggleShowOlderConversations}
+                hideInactiveConversations={hideInactiveConversations}
+                toggleHideInactiveConversations={
+                  toggleHideInactiveConversations
+                }
+                hideOldConversations={hideOldConversations}
+                toggleHideOldConversations={toggleHideOldConversations}
                 showRepoBranchMetadata={showRepoBranchMetadata}
                 toggleShowRepoBranchMetadata={toggleShowRepoBranchMetadata}
                 showLlmProfiles={showLlmProfiles}
                 toggleShowLlmProfiles={toggleShowLlmProfiles}
-                totalConversationsCount={conversations.length}
-                onRequestDeleteAll={() => setConfirmDeleteAllVisible(true)}
               />
             </div>
           </div>
@@ -740,20 +702,6 @@ export function ConversationPanel({
             setSelectedConversationTitle(null);
           }}
           conversationTitle={selectedConversationTitle ?? undefined}
-        />
-      )}
-
-      {confirmDeleteAllVisible && (
-        <ConfirmDeleteModal
-          title={t(I18nKey.CONVERSATION$CONFIRM_DELETE_ALL_TITLE)}
-          description={t(I18nKey.CONVERSATION$CONFIRM_DELETE_ALL_DESC, {
-            count: conversations.length,
-          })}
-          onConfirm={async () => {
-            await handleConfirmDeleteAll();
-            setConfirmDeleteAllVisible(false);
-          }}
-          onCancel={() => setConfirmDeleteAllVisible(false)}
         />
       )}
 

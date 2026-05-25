@@ -8,9 +8,10 @@ describe("conversation-panel-preferences store", () => {
     window.localStorage.clear();
   });
 
-  it("defaults to showing older conversations, chronological list, and expected toggles", () => {
+  it("defaults to all conversations visible (hide toggles off) and expected preferences", () => {
     const state = useConversationPanelPreferencesStore.getState();
-    expect(state.showOlderConversations).toBe(true);
+    expect(state.hideInactiveConversations).toBe(false);
+    expect(state.hideOldConversations).toBe(false);
     expect(state.showRepoBranchMetadata).toBe(false);
     expect(state.showLlmProfiles).toBe(false);
     expect(state.organizeMode).toBe("chronological");
@@ -18,19 +19,34 @@ describe("conversation-panel-preferences store", () => {
     expect(state.threadScope).toBe("all");
   });
 
-  it("toggles showOlderConversations and persists the new value to localStorage", () => {
+  it("toggles hideInactiveConversations and persists to localStorage", () => {
     useConversationPanelPreferencesStore
       .getState()
-      .toggleShowOlderConversations();
+      .toggleHideInactiveConversations();
 
     expect(
-      useConversationPanelPreferencesStore.getState().showOlderConversations,
-    ).toBe(false);
+      useConversationPanelPreferencesStore.getState().hideInactiveConversations,
+    ).toBe(true);
 
     const persisted = JSON.parse(
       window.localStorage.getItem(STORAGE_KEY) ?? "{}",
     );
-    expect(persisted.state.showOlderConversations).toBe(false);
+    expect(persisted.state.hideInactiveConversations).toBe(true);
+  });
+
+  it("toggles hideOldConversations and persists to localStorage", () => {
+    useConversationPanelPreferencesStore
+      .getState()
+      .toggleHideOldConversations();
+
+    expect(
+      useConversationPanelPreferencesStore.getState().hideOldConversations,
+    ).toBe(true);
+
+    const persisted = JSON.parse(
+      window.localStorage.getItem(STORAGE_KEY) ?? "{}",
+    );
+    expect(persisted.state.hideOldConversations).toBe(true);
   });
 
   it("toggles showRepoBranchMetadata and persists the new value to localStorage", () => {
@@ -48,32 +64,20 @@ describe("conversation-panel-preferences store", () => {
     expect(persisted.state.showRepoBranchMetadata).toBe(true);
   });
 
-  it("supports explicit setters for both preferences", () => {
-    useConversationPanelPreferencesStore
-      .getState()
-      .setShowOlderConversations(false);
-    useConversationPanelPreferencesStore
-      .getState()
-      .setShowRepoBranchMetadata(true);
-
-    const state = useConversationPanelPreferencesStore.getState();
-    expect(state.showOlderConversations).toBe(false);
-    expect(state.showRepoBranchMetadata).toBe(true);
-  });
-
   it("persists data fields but not action functions", () => {
     useConversationPanelPreferencesStore
       .getState()
-      .toggleShowOlderConversations();
+      .toggleHideOldConversations();
 
     const persisted = JSON.parse(
       window.localStorage.getItem(STORAGE_KEY) ?? "{}",
     );
     expect(Object.keys(persisted.state).sort()).toEqual([
       "conversationSort",
+      "hideInactiveConversations",
+      "hideOldConversations",
       "organizeMode",
       "showLlmProfiles",
-      "showOlderConversations",
       "showRepoBranchMetadata",
       "threadScope",
     ]);
@@ -111,15 +115,14 @@ describe("conversation-panel-preferences store", () => {
     });
   });
 
-  it("rehydrates legacy localStorage payloads (older fields preserved, new fields filled with defaults)", async () => {
-    // Simulate a user upgrading from a build that only persisted the two
-    // original preferences. After rehydration the store should keep the
-    // user's existing choices and fill the new fields from `initialState`.
+  it("rehydrates legacy localStorage payloads (new fields filled with defaults)", async () => {
+    // Simulate a user upgrading from a build that only persisted the old
+    // preferences. After rehydration the store should fill the new fields
+    // from `initialState`.
     window.localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
         state: {
-          showOlderConversations: false,
           showRepoBranchMetadata: true,
         },
         version: 0,
@@ -130,17 +133,17 @@ describe("conversation-panel-preferences store", () => {
 
     const state = useConversationPanelPreferencesStore.getState();
     expect({
-      showOlderConversations: state.showOlderConversations,
+      hideInactiveConversations: state.hideInactiveConversations,
+      hideOldConversations: state.hideOldConversations,
       showRepoBranchMetadata: state.showRepoBranchMetadata,
       showLlmProfiles: state.showLlmProfiles,
       organizeMode: state.organizeMode,
       conversationSort: state.conversationSort,
       threadScope: state.threadScope,
     }).toEqual({
-      // Preserved from the legacy payload.
-      showOlderConversations: false,
+      hideInactiveConversations: false,
+      hideOldConversations: false,
       showRepoBranchMetadata: true,
-      // Filled with defaults for missing fields.
       showLlmProfiles: false,
       organizeMode: "chronological",
       conversationSort: "updated",

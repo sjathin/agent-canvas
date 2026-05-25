@@ -20,7 +20,8 @@ import type {
  * `persist` handles migration of unknown fields gracefully.
  */
 interface ConversationPanelPreferencesState {
-  showOlderConversations: boolean;
+  hideInactiveConversations: boolean;
+  hideOldConversations: boolean;
   showRepoBranchMetadata: boolean;
   showLlmProfiles: boolean;
   organizeMode: OrganizeMode;
@@ -29,8 +30,8 @@ interface ConversationPanelPreferencesState {
 }
 
 interface ConversationPanelPreferencesActions {
-  setShowOlderConversations: (value: boolean) => void;
-  toggleShowOlderConversations: () => void;
+  toggleHideInactiveConversations: () => void;
+  toggleHideOldConversations: () => void;
   setShowRepoBranchMetadata: (value: boolean) => void;
   toggleShowRepoBranchMetadata: () => void;
   setShowLlmProfiles: (value: boolean) => void;
@@ -44,7 +45,8 @@ type ConversationPanelPreferencesStore = ConversationPanelPreferencesState &
   ConversationPanelPreferencesActions;
 
 const initialState: ConversationPanelPreferencesState = {
-  showOlderConversations: true,
+  hideInactiveConversations: false,
+  hideOldConversations: false,
   showRepoBranchMetadata: false,
   showLlmProfiles: false,
   organizeMode: "chronological",
@@ -58,11 +60,13 @@ export const useConversationPanelPreferencesStore =
       (set) => ({
         ...initialState,
 
-        setShowOlderConversations: (value) =>
-          set(() => ({ showOlderConversations: value })),
-        toggleShowOlderConversations: () =>
+        toggleHideInactiveConversations: () =>
           set((state) => ({
-            showOlderConversations: !state.showOlderConversations,
+            hideInactiveConversations: !state.hideInactiveConversations,
+          })),
+        toggleHideOldConversations: () =>
+          set((state) => ({
+            hideOldConversations: !state.hideOldConversations,
           })),
 
         setShowRepoBranchMetadata: (value) =>
@@ -88,7 +92,8 @@ export const useConversationPanelPreferencesStore =
         storage: createJSONStorage(() => localStorage),
         // Only persist the data fields — actions are recreated on each load.
         partialize: (state): ConversationPanelPreferencesState => ({
-          showOlderConversations: state.showOlderConversations,
+          hideInactiveConversations: state.hideInactiveConversations,
+          hideOldConversations: state.hideOldConversations,
           showRepoBranchMetadata: state.showRepoBranchMetadata,
           showLlmProfiles: state.showLlmProfiles,
           organizeMode: state.organizeMode,
