@@ -6,13 +6,10 @@ import {
   Check,
   Clock3,
   ClockArrowDown,
-  Eye,
-  EyeOff,
   Folder,
   GitBranch,
   ListFilter,
   MessageCircle,
-  Star,
 } from "lucide-react";
 import { I18nKey } from "#/i18n/declaration";
 import type { BackendKind } from "#/api/backend-registry/types";
@@ -22,7 +19,6 @@ import { formControlTransitionClassName } from "#/utils/form-control-classes";
 import type {
   ConversationSortField,
   OrganizeMode,
-  ThreadScope,
 } from "./conversation-panel-list-helpers";
 
 const MENU_SECTION_HEADING_PADDING = "px-2 pb-1 pt-1";
@@ -134,12 +130,8 @@ export interface ConversationPanelFilterMenuProps {
   setOrganizeMode: (mode: OrganizeMode) => void;
   conversationSort: ConversationSortField;
   setConversationSort: (sort: ConversationSortField) => void;
-  threadScope: ThreadScope;
-  setThreadScope: (scope: ThreadScope) => void;
-  hideInactiveConversations: boolean;
-  toggleHideInactiveConversations: () => void;
-  hideOldConversations: boolean;
-  toggleHideOldConversations: () => void;
+  showRecentOnly: boolean;
+  setShowRecentOnly: (value: boolean) => void;
   showRepoBranchMetadata: boolean;
   toggleShowRepoBranchMetadata: () => void;
   showLlmProfiles: boolean;
@@ -155,12 +147,8 @@ export function ConversationPanelFilterMenu({
   setOrganizeMode,
   conversationSort,
   setConversationSort,
-  threadScope,
-  setThreadScope,
-  hideInactiveConversations,
-  toggleHideInactiveConversations,
-  hideOldConversations,
-  toggleHideOldConversations,
+  showRecentOnly,
+  setShowRecentOnly,
   showRepoBranchMetadata,
   toggleShowRepoBranchMetadata,
   showLlmProfiles,
@@ -309,45 +297,19 @@ export function ConversationPanelFilterMenu({
           <MenuHeading>{t(I18nKey.CONVERSATION_PANEL$SHOW)}</MenuHeading>
           <MenuRow
             icon={MessageCircle}
-            label={t(I18nKey.CONVERSATION_PANEL$ALL_THREADS)}
-            selected={threadScope === "all"}
+            label={t(I18nKey.CONVERSATION_PANEL$ALL_CONVERSATIONS)}
+            selected={!showRecentOnly}
             onClick={() => {
-              setThreadScope("all");
+              setShowRecentOnly(false);
               setFilterMenuOpen(false);
             }}
           />
           <MenuRow
-            icon={Star}
-            label={t(I18nKey.CONVERSATION_PANEL$RELEVANT_THREADS)}
-            selected={threadScope === "relevant"}
+            icon={Clock3}
+            label={t(I18nKey.CONVERSATION_PANEL$RECENT_CONVERSATIONS)}
+            selected={showRecentOnly}
             onClick={() => {
-              setThreadScope("relevant");
-              setFilterMenuOpen(false);
-            }}
-          />
-          <MenuRow
-            testId="toggle-hide-inactive"
-            icon={hideInactiveConversations ? Eye : EyeOff}
-            label={
-              hideInactiveConversations
-                ? t(I18nKey.CONVERSATION_PANEL$SHOW_INACTIVE)
-                : t(I18nKey.CONVERSATION_PANEL$HIDE_INACTIVE)
-            }
-            onClick={() => {
-              toggleHideInactiveConversations();
-              setFilterMenuOpen(false);
-            }}
-          />
-          <MenuRow
-            testId="toggle-hide-old"
-            icon={hideOldConversations ? Eye : EyeOff}
-            label={
-              hideOldConversations
-                ? t(I18nKey.CONVERSATION_PANEL$SHOW_OLD)
-                : t(I18nKey.CONVERSATION_PANEL$HIDE_OLD)
-            }
-            onClick={() => {
-              toggleHideOldConversations();
+              setShowRecentOnly(true);
               setFilterMenuOpen(false);
             }}
           />

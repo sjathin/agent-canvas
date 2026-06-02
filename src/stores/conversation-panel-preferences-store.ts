@@ -3,7 +3,6 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import type {
   ConversationSortField,
   OrganizeMode,
-  ThreadScope,
 } from "#/components/features/conversation-panel/conversation-panel-list-helpers";
 
 /**
@@ -20,38 +19,32 @@ import type {
  * `persist` handles migration of unknown fields gracefully.
  */
 interface ConversationPanelPreferencesState {
-  hideInactiveConversations: boolean;
-  hideOldConversations: boolean;
+  showRecentOnly: boolean;
   showRepoBranchMetadata: boolean;
   showLlmProfiles: boolean;
   organizeMode: OrganizeMode;
   conversationSort: ConversationSortField;
-  threadScope: ThreadScope;
 }
 
 interface ConversationPanelPreferencesActions {
-  toggleHideInactiveConversations: () => void;
-  toggleHideOldConversations: () => void;
+  setShowRecentOnly: (value: boolean) => void;
   setShowRepoBranchMetadata: (value: boolean) => void;
   toggleShowRepoBranchMetadata: () => void;
   setShowLlmProfiles: (value: boolean) => void;
   toggleShowLlmProfiles: () => void;
   setOrganizeMode: (value: OrganizeMode) => void;
   setConversationSort: (value: ConversationSortField) => void;
-  setThreadScope: (value: ThreadScope) => void;
 }
 
 type ConversationPanelPreferencesStore = ConversationPanelPreferencesState &
   ConversationPanelPreferencesActions;
 
 const initialState: ConversationPanelPreferencesState = {
-  hideInactiveConversations: false,
-  hideOldConversations: false,
+  showRecentOnly: true,
   showRepoBranchMetadata: false,
   showLlmProfiles: false,
   organizeMode: "chronological",
   conversationSort: "updated",
-  threadScope: "all",
 };
 
 export const useConversationPanelPreferencesStore =
@@ -60,14 +53,7 @@ export const useConversationPanelPreferencesStore =
       (set) => ({
         ...initialState,
 
-        toggleHideInactiveConversations: () =>
-          set((state) => ({
-            hideInactiveConversations: !state.hideInactiveConversations,
-          })),
-        toggleHideOldConversations: () =>
-          set((state) => ({
-            hideOldConversations: !state.hideOldConversations,
-          })),
+        setShowRecentOnly: (value) => set(() => ({ showRecentOnly: value })),
 
         setShowRepoBranchMetadata: (value) =>
           set(() => ({ showRepoBranchMetadata: value })),
@@ -85,20 +71,16 @@ export const useConversationPanelPreferencesStore =
         setOrganizeMode: (value) => set(() => ({ organizeMode: value })),
         setConversationSort: (value) =>
           set(() => ({ conversationSort: value })),
-        setThreadScope: (value) => set(() => ({ threadScope: value })),
       }),
       {
         name: "conversation-panel-preferences",
         storage: createJSONStorage(() => localStorage),
-        // Only persist the data fields — actions are recreated on each load.
         partialize: (state): ConversationPanelPreferencesState => ({
-          hideInactiveConversations: state.hideInactiveConversations,
-          hideOldConversations: state.hideOldConversations,
+          showRecentOnly: state.showRecentOnly,
           showRepoBranchMetadata: state.showRepoBranchMetadata,
           showLlmProfiles: state.showLlmProfiles,
           organizeMode: state.organizeMode,
           conversationSort: state.conversationSort,
-          threadScope: state.threadScope,
         }),
       },
     ),

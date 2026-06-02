@@ -490,10 +490,12 @@ describe("ConversationPanel", () => {
     expect(newCards).toHaveLength(3);
   });
 
-  it("keeps invalid timestamps recent and shows older conversations by default", async () => {
+  it("keeps invalid timestamps visible and shows all conversations when showRecentOnly is off", async () => {
     const now = Date.now();
     const minutesAgo = (minutes: number) =>
       new Date(now - minutes * 60 * 1000).toISOString();
+
+    useConversationPanelPreferencesStore.setState({ showRecentOnly: false });
 
     const user = userEvent.setup();
     const searchConversationsSpy = vi.spyOn(
@@ -574,8 +576,7 @@ describe("ConversationPanel", () => {
     useConversationPanelPreferencesStore.setState({
       conversationSort: "updated",
       organizeMode: "chronological",
-      hideInactiveConversations: false,
-      hideOldConversations: false,
+      showRecentOnly: false,
     });
 
     vi.spyOn(
@@ -1229,12 +1230,13 @@ describe("ConversationPanel", () => {
     ).not.toBeInTheDocument();
   });
 
-  describe("older conversations cutoff", () => {
+  describe("show recent / all conversations filter", () => {
     const recentIso = () => new Date().toISOString();
     const olderIso = () =>
       new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
 
-    it("shows conversations older than 1h and includes a summary line", async () => {
+    it("hides old conversations by default (showRecentOnly=true) and shows all when toggled", async () => {
+      const user = userEvent.setup();
       vi.spyOn(
         AgentServerConversationService,
         "searchConversations",
@@ -1262,16 +1264,22 @@ describe("ConversationPanel", () => {
       renderConversationPanel();
 
       const cards = await screen.findAllByTestId("conversation-card");
-      expect(cards).toHaveLength(3);
+      expect(cards).toHaveLength(1);
       expect(screen.getByText("Recent")).toBeInTheDocument();
+      expect(screen.queryByText("Old 1")).not.toBeInTheDocument();
+
+      // Switch to "All conversations"
+      await user.click(screen.getByTestId("older-conversations-filter-toggle"));
+      await user.click(
+        screen.getByRole("menuitemradio", {
+          name: /CONVERSATION_PANEL\$ALL_CONVERSATIONS/,
+        }),
+      );
+
+      const allCards = await screen.findAllByTestId("conversation-card");
+      expect(allCards).toHaveLength(3);
       expect(screen.getByText("Old 1")).toBeInTheDocument();
       expect(screen.getByText("Old 2")).toBeInTheDocument();
-
-      const summary = screen.getByTestId("older-conversations-summary");
-      expect(summary).toHaveTextContent("SIDEBAR$CONVERSATIONS");
-      expect(
-        within(summary).getByTestId("older-conversations-filter-toggle"),
-      ).toBeInTheDocument();
     });
 
     it("always renders the conversations header with the filter control", async () => {
@@ -1304,7 +1312,7 @@ describe("ConversationPanel", () => {
       ).toBeInTheDocument();
     });
 
-    it("hides old conversations when the hide-old toggle is activated", async () => {
+    it("switches between Recent and All conversations via the filter menu", async () => {
       const user = userEvent.setup();
       vi.spyOn(
         AgentServerConversationService,
@@ -1328,59 +1336,38 @@ describe("ConversationPanel", () => {
       renderConversationPanel();
 
       let cards = await screen.findAllByTestId("conversation-card");
-      expect(cards).toHaveLength(2);
+      expect(cards).toHaveLength(1);
 
+      // Switch to All conversations
       await user.click(screen.getByTestId("older-conversations-filter-toggle"));
-      await user.click(screen.getByTestId("toggle-hide-old"));
+      await user.click(
+        screen.getByRole("menuitemradio", {
+          name: /CONVERSATION_PANEL\$ALL_CONVERSATIONS/,
+        }),
+      );
+
+      cards = await screen.findAllByTestId("conversation-card");
+      expect(cards).toHaveLength(2);
+      expect(screen.getByText("Recent")).toBeInTheDocument();
+      expect(screen.getByText("Old 1")).toBeInTheDocument();
+
+      // Switch back to Recent only
+      await user.click(screen.getByTestId("older-conversations-filter-toggle"));
+      await user.click(
+        screen.getByRole("menuitemradio", {
+          name: /CONVERSATION_PANEL\$RECENT_CONVERSATIONS/,
+        }),
+      );
 
       cards = await screen.findAllByTestId("conversation-card");
       expect(cards).toHaveLength(1);
       expect(screen.getByText("Recent")).toBeInTheDocument();
       expect(screen.queryByText("Old 1")).not.toBeInTheDocument();
-
-      // Toggle back to show all
-      await user.click(screen.getByTestId("older-conversations-filter-toggle"));
-      await user.click(screen.getByTestId("toggle-hide-old"));
-      cards = await screen.findAllByTestId("conversation-card");
-      expect(cards).toHaveLength(2);
-    });
-
-    it("hides inactive conversations when the hide-inactive toggle is activated", async () => {
-      const user = userEvent.setup();
-      vi.spyOn(
-        AgentServerConversationService,
-        "searchConversations",
-      ).mockResolvedValue({
-        items: [
-          createMockConversation({
-            id: "recent",
-            title: "Recent",
-            updated_at: recentIso(),
-          }),
-          createMockConversation({
-            id: "inactive",
-            title: "Inactive",
-            updated_at: olderIso(),
-          }),
-        ],
-        next_page_id: null,
-      });
-
-      renderConversationPanel();
-
-      let cards = await screen.findAllByTestId("conversation-card");
-      expect(cards).toHaveLength(2);
-
-      await user.click(screen.getByTestId("older-conversations-filter-toggle"));
-      await user.click(screen.getByTestId("toggle-hide-inactive"));
-
-      cards = await screen.findAllByTestId("conversation-card");
-      expect(cards).toHaveLength(1);
-      expect(screen.getByText("Recent")).toBeInTheDocument();
-      expect(screen.queryByText("Inactive")).not.toBeInTheDocument();
     });
 
     it("keeps repo/branch metadata hidden by default and toggles it from the filter dropdown", async () => {
+      useConversationPanelPreferencesStore.setState({ showRecentOnly: false });
+
       const user = userEvent.setup();
       vi.spyOn(
         AgentServerConversationService,

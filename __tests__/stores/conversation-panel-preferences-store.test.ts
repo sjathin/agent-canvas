@@ -8,45 +8,26 @@ describe("conversation-panel-preferences store", () => {
     window.localStorage.clear();
   });
 
-  it("defaults to all conversations visible (hide toggles off) and expected preferences", () => {
+  it("defaults to showRecentOnly=true and expected preferences", () => {
     const state = useConversationPanelPreferencesStore.getState();
-    expect(state.hideInactiveConversations).toBe(false);
-    expect(state.hideOldConversations).toBe(false);
+    expect(state.showRecentOnly).toBe(true);
     expect(state.showRepoBranchMetadata).toBe(false);
     expect(state.showLlmProfiles).toBe(false);
     expect(state.organizeMode).toBe("chronological");
     expect(state.conversationSort).toBe("updated");
-    expect(state.threadScope).toBe("all");
   });
 
-  it("toggles hideInactiveConversations and persists to localStorage", () => {
-    useConversationPanelPreferencesStore
-      .getState()
-      .toggleHideInactiveConversations();
+  it("sets showRecentOnly and persists to localStorage", () => {
+    useConversationPanelPreferencesStore.getState().setShowRecentOnly(false);
 
     expect(
-      useConversationPanelPreferencesStore.getState().hideInactiveConversations,
-    ).toBe(true);
+      useConversationPanelPreferencesStore.getState().showRecentOnly,
+    ).toBe(false);
 
     const persisted = JSON.parse(
       window.localStorage.getItem(STORAGE_KEY) ?? "{}",
     );
-    expect(persisted.state.hideInactiveConversations).toBe(true);
-  });
-
-  it("toggles hideOldConversations and persists to localStorage", () => {
-    useConversationPanelPreferencesStore
-      .getState()
-      .toggleHideOldConversations();
-
-    expect(
-      useConversationPanelPreferencesStore.getState().hideOldConversations,
-    ).toBe(true);
-
-    const persisted = JSON.parse(
-      window.localStorage.getItem(STORAGE_KEY) ?? "{}",
-    );
-    expect(persisted.state.hideOldConversations).toBe(true);
+    expect(persisted.state.showRecentOnly).toBe(false);
   });
 
   it("toggles showRepoBranchMetadata and persists the new value to localStorage", () => {
@@ -65,21 +46,17 @@ describe("conversation-panel-preferences store", () => {
   });
 
   it("persists data fields but not action functions", () => {
-    useConversationPanelPreferencesStore
-      .getState()
-      .toggleHideOldConversations();
+    useConversationPanelPreferencesStore.getState().setShowRecentOnly(false);
 
     const persisted = JSON.parse(
       window.localStorage.getItem(STORAGE_KEY) ?? "{}",
     );
     expect(Object.keys(persisted.state).sort()).toEqual([
       "conversationSort",
-      "hideInactiveConversations",
-      "hideOldConversations",
       "organizeMode",
       "showLlmProfiles",
+      "showRecentOnly",
       "showRepoBranchMetadata",
-      "threadScope",
     ]);
   });
 
@@ -97,28 +74,22 @@ describe("conversation-panel-preferences store", () => {
     ).toBe(false);
   });
 
-  it("updates organize, sort, and thread-scope preferences via their setters", () => {
+  it("updates organize and sort preferences via their setters", () => {
     const store = useConversationPanelPreferencesStore.getState();
     store.setOrganizeMode("grouped");
     store.setConversationSort("created");
-    store.setThreadScope("relevant");
 
     const next = useConversationPanelPreferencesStore.getState();
     expect({
       organizeMode: next.organizeMode,
       conversationSort: next.conversationSort,
-      threadScope: next.threadScope,
     }).toEqual({
       organizeMode: "grouped",
       conversationSort: "created",
-      threadScope: "relevant",
     });
   });
 
   it("rehydrates legacy localStorage payloads (new fields filled with defaults)", async () => {
-    // Simulate a user upgrading from a build that only persisted the old
-    // preferences. After rehydration the store should fill the new fields
-    // from `initialState`.
     window.localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
@@ -133,21 +104,17 @@ describe("conversation-panel-preferences store", () => {
 
     const state = useConversationPanelPreferencesStore.getState();
     expect({
-      hideInactiveConversations: state.hideInactiveConversations,
-      hideOldConversations: state.hideOldConversations,
+      showRecentOnly: state.showRecentOnly,
       showRepoBranchMetadata: state.showRepoBranchMetadata,
       showLlmProfiles: state.showLlmProfiles,
       organizeMode: state.organizeMode,
       conversationSort: state.conversationSort,
-      threadScope: state.threadScope,
     }).toEqual({
-      hideInactiveConversations: false,
-      hideOldConversations: false,
+      showRecentOnly: true,
       showRepoBranchMetadata: true,
       showLlmProfiles: false,
       organizeMode: "chronological",
       conversationSort: "updated",
-      threadScope: "all",
     });
   });
 });

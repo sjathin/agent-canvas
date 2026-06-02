@@ -32,6 +32,7 @@ import {
   groupConversations,
   getGroupConversationPreview,
   sortConversationsByField,
+  parseConversationTimeMs,
   type ConversationGroupLaunch,
 } from "./conversation-panel-list-helpers";
 
@@ -49,29 +50,20 @@ const noop = () => {};
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 
-// The cutoff is intentionally relative to "now" each time the list is
-// recomputed, so conversations naturally age into the hidden set as the
-// query refreshes. Missing or unparseable timestamps are treated as recent
-// (kept visible) so they are never accidentally hidden.
-const filterByHidePreferences = <T extends { updated_at: string }>(
+// The cutoff is relative to "now" each time the list is recomputed, so
+// conversations naturally age into the hidden set as the query refreshes.
+// Missing or unparseable timestamps are treated as recent (kept visible)
+// so they are never accidentally hidden.
+const filterRecentConversations = <T extends { updated_at: string }>(
   items: readonly T[],
-  hideInactive: boolean,
-  hideOld: boolean,
+  showRecentOnly: boolean,
 ): T[] => {
-  if (!hideInactive && !hideOld) return [...items];
+  if (!showRecentOnly) return [...items];
   const cutoff = Date.now() - ONE_HOUR_MS;
-  const isRecent = (item: T) => {
-    const t = item.updated_at ? Date.parse(item.updated_at) : NaN;
-    return !Number.isFinite(t) || t >= cutoff;
-  };
-  let result: T[] = [...items];
-  if (hideInactive) {
-    result = result.filter(isRecent);
-  }
-  if (hideOld) {
-    result = result.filter(isRecent);
-  }
-  return result;
+  return items.filter((item) => {
+    const t = parseConversationTimeMs(item.updated_at);
+    return t === 0 || t >= cutoff;
+  });
 };
 
 export function ConversationPanel({
@@ -95,17 +87,11 @@ export function ConversationPanel({
     confirmExitConversationModalVisible,
     setConfirmExitConversationModalVisible,
   ] = React.useState(false);
-  const hideInactiveConversations = useConversationPanelPreferencesStore(
-    (state) => state.hideInactiveConversations,
+  const showRecentOnly = useConversationPanelPreferencesStore(
+    (state) => state.showRecentOnly,
   );
-  const toggleHideInactiveConversations = useConversationPanelPreferencesStore(
-    (state) => state.toggleHideInactiveConversations,
-  );
-  const hideOldConversations = useConversationPanelPreferencesStore(
-    (state) => state.hideOldConversations,
-  );
-  const toggleHideOldConversations = useConversationPanelPreferencesStore(
-    (state) => state.toggleHideOldConversations,
+  const setShowRecentOnly = useConversationPanelPreferencesStore(
+    (state) => state.setShowRecentOnly,
   );
   const showRepoBranchMetadata = useConversationPanelPreferencesStore(
     (state) => state.showRepoBranchMetadata,
@@ -130,12 +116,6 @@ export function ConversationPanel({
   );
   const setConversationSort = useConversationPanelPreferencesStore(
     (state) => state.setConversationSort,
-  );
-  const threadScope = useConversationPanelPreferencesStore(
-    (state) => state.threadScope,
-  );
-  const setThreadScope = useConversationPanelPreferencesStore(
-    (state) => state.setThreadScope,
   );
   const [filterMenuOpen, setFilterMenuOpen] = React.useState(false);
   const [isListScrolled, setIsListScrolled] = React.useState(false);
@@ -208,21 +188,9 @@ export function ConversationPanel({
     [data],
   );
 
-  const scopedConversations = React.useMemo(() => {
-    if (threadScope === "relevant") {
-      return conversations.filter((c) => isExecutionActive(c.execution_status));
-    }
-    return conversations;
-  }, [conversations, threadScope]);
-
   const filteredConversations = React.useMemo(
-    () =>
-      filterByHidePreferences(
-        scopedConversations,
-        hideInactiveConversations,
-        hideOldConversations,
-      ),
-    [scopedConversations, hideInactiveConversations, hideOldConversations],
+    () => filterRecentConversations(conversations, showRecentOnly),
+    [conversations, showRecentOnly],
   );
 
   const sortedVisibleConversations = React.useMemo(
@@ -506,14 +474,8 @@ export function ConversationPanel({
                 setOrganizeMode={setOrganizeMode}
                 conversationSort={conversationSort}
                 setConversationSort={setConversationSort}
-                threadScope={threadScope}
-                setThreadScope={setThreadScope}
-                hideInactiveConversations={hideInactiveConversations}
-                toggleHideInactiveConversations={
-                  toggleHideInactiveConversations
-                }
-                hideOldConversations={hideOldConversations}
-                toggleHideOldConversations={toggleHideOldConversations}
+                showRecentOnly={showRecentOnly}
+                setShowRecentOnly={setShowRecentOnly}
                 showRepoBranchMetadata={showRepoBranchMetadata}
                 toggleShowRepoBranchMetadata={toggleShowRepoBranchMetadata}
                 showLlmProfiles={showLlmProfiles}
